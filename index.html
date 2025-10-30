@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chat en Tiempo Real</title>
+  <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+    #messages {
+      height: 400px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      background: #f9f9f9;
+    }
+    input, button {
+      padding: 8px;
+      margin: 5px;
+    }
+    button {
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <h2>💬 Chat en Tiempo Real</h2>
+  
+  <div id="messages"></div>
+
+  <input type="text" id="username" placeholder="Tu nombre" value="Anónimo" />
+  <br />
+  <input type="text" id="message" placeholder="Escribe tu mensaje..." style="width: 70%;" />
+  <button onclick="sendMessage()">Enviar</button>
+
+  <script>
+    // 🔑 CONFIGURACIÓN DE PUSHER (¡CAMBIA ESTOS VALORES!)
+    const PUSHER_KEY = '7dc9af9b21c755cdc52a'; // ← Reemplaza con tu key pública de Pusher
+    const PUSHER_CLUSTER = 'us2';       // ← Tu cluster (ej: 'us2', 'mt1', etc.)
+    const BACKEND_URL = 'http://127.0.0.1:5001'; // ← URL local del backend durante desarrollo
+
+    // Inicializar Pusher
+    const pusher = new Pusher(PUSHER_KEY, {
+      cluster: PUSHER_CLUSTER
+    });
+
+    const channel = pusher.subscribe('chat-channel');
+    channel.bind('new-message', function(data) {
+      addMessage(data.username, data.message);
+    });
+
+    // Cargar historial al cargar la página
+    window.onload = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/messages`);
+        const messages = await res.json();
+        messages.forEach(msg => {
+          addMessage(msg.username, msg.message);
+        });
+      } catch (err) {
+        console.error('Error al cargar historial:', err);
+        addMessage('Sistema', '⚠️ No se pudo cargar el historial.');
+      }
+    };
+
+    function addMessage(username, text) {
+      const messagesDiv = document.getElementById('messages');
+      const p = document.createElement('p');
+      // Evitar XSS: escapar contenido antes de insertarlo
+      p.innerHTML = `<strong>${escapeHtml(username)}:</strong> ${escapeHtml(text)}`;
+      messagesDiv.appendChild(p);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function escapeHtml(unsafe) {
+      return String(unsafe)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    async function sendMessage() {
+      const username = document.getElementById('username').value.trim();
+      const message = document.getElementById('message').value.trim();
+
+      if (!username || !message) {
+        alert('Por favor, ingresa tu nombre y un mensaje.');
+        return;
+      }
+
+      try {
+        await fetch(`${BACKEND_URL}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, message })
+        });
+        document.getElementById('message').value = '';
+      } catch (err) {
+        console.error('Error al enviar mensaje:', err);
+        alert('❌ No se pudo enviar el mensaje.');
+      }
+    }
+
+    // Permitir enviar con Enter
+    document.getElementById('message').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</body>
+</html>
